@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Finansal Pusula</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- Sidebar -->
+<aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+        <span class="logo-icon">⊕</span>
+        <span class="logo-text">Finansal<br>Pusula</span>
+    </div>
+    <nav class="sidebar-nav">
+        <a href="#" class="nav-item active" data-section="dashboard">
+            <span class="nav-icon">◈</span><span>Gösterge Paneli</span>
+        </a>
+        <a href="#" class="nav-item" data-section="input">
+            <span class="nav-icon">◎</span><span>Veri Girişi</span>
+        </a>
+        <a href="#" class="nav-item" data-section="ratios">
+            <span class="nav-icon">◉</span><span>Rasyo Analizi</span>
+        </a>
+        <a href="#" class="nav-item" data-section="charts">
+            <span class="nav-icon">◐</span><span>Grafikler</span>
+        </a>
+        <a href="#" class="nav-item" data-section="report">
+            <span class="nav-icon">◑</span><span>Rapor</span>
+        </a>
+        <a href="#" class="nav-item" data-section="glossary">
+            <span class="nav-icon">◒</span><span>Sözlük</span>
+        </a>
+    </nav>
+    <div class="sidebar-footer">v2.0 • 2024</div>
+</aside>
+
+<div class="main-wrapper">
+    <!-- Top bar -->
+    <header class="topbar">
+        <button class="menu-toggle" id="menuToggle">☰</button>
+        <div class="topbar-title" id="pageTitle">Gösterge Paneli</div>
+        <div class="topbar-actions">
+            <span class="status-dot" id="statusDot"></span>
+            <span class="status-text" id="statusText">Veri Bekleniyor</span>
+        </div>
+    </header>
+
+    <!-- SECTIONS -->
+    <main class="content">
+
+        <!-- ===== DASHBOARD ===== -->
+        <section id="section-dashboard" class="section active">
+            <div class="section-hero">
+                <h1>Finansal<br><em>Sağlık Skoru</em></h1>
+                <p>Şirketinizin finansal verilerini analiz edin, kritik rasyoları hesaplayın ve görsel raporlar oluşturun.</p>
+                <button class="btn-hero" onclick="showSection('input')">Analize Başla →</button>
+            </div>
+            <div class="kpi-grid" id="kpiGrid">
+                <div class="kpi-card kpi-empty">
+                    <div class="kpi-icon">💧</div>
+                    <div class="kpi-label">Likidite Oranı</div>
+                    <div class="kpi-value">—</div>
+                </div>
+                <div class="kpi-card kpi-empty">
+                    <div class="kpi-icon">⚗️</div>
+                    <div class="kpi-label">Asit Test Oranı</div>
+                    <div class="kpi-value">—</div>
+                </div>
+                <div class="kpi-card kpi-empty">
+                    <div class="kpi-icon">⚖️</div>
+                    <div class="kpi-label">Borç/Özkaynak</div>
+                    <div class="kpi-value">—</div>
+                </div>
+                <div class="kpi-card kpi-empty">
+                    <div class="kpi-icon">📈</div>
+                    <div class="kpi-label">Net Kar Marjı</div>
+                    <div class="kpi-value">—</div>
+                </div>
+                <div class="kpi-card kpi-empty">
+                    <div class="kpi-icon">🔄</div>
+                    <div class="kpi-label">Aktif Devir Hızı</div>
+                    <div class="kpi-value">—</div>
+                </div>
+                <div class="kpi-card kpi-empty">
+                    <div class="kpi-icon">💰</div>
+                    <div class="kpi-label">ROE</div>
+                    <div class="kpi-value">—</div>
+                </div>
+            </div>
+            <div id="alertsBox" class="alerts-box hidden">
+                <h3>⚠ Kritik Uyarılar</h3>
+                <div id="alertsList"></div>
+            </div>
+        </section>
+
+        <!-- ===== INPUT ===== -->
+        <section id="section-input" class="section">
+            <h2 class="section-title">Veri Girişi</h2>
+
+            <div class="tabs">
+                <button class="tab active" data-tab="manuel">Manuel Giriş</button>
+                <button class="tab" data-tab="csv">CSV / JSON Yükle</button>
+            </div>
+
+            <div id="tab-manuel" class="tab-content active">
+                <div class="input-grid">
+                    <div class="input-group">
+                        <h3 class="group-title">🏦 Bilanço — Varlıklar</h3>
+                        <div class="field"><label>Dönen Varlıklar</label><input type="number" id="donenVarliklar" placeholder="0"></div>
+                        <div class="field"><label>Stoklar</label><input type="number" id="stoklar" placeholder="0"></div>
+                        <div class="field"><label>Nakit & Eşdeğerleri</label><input type="number" id="nakit" placeholder="0"></div>
+                        <div class="field"><label>Toplam Aktifler</label><input type="number" id="toplamAktif" placeholder="0"></div>
+                    </div>
+                    <div class="input-group">
+                        <h3 class="group-title">📋 Bilanço — Borçlar</h3>
+                        <div class="field"><label>Kısa Vadeli Borçlar</label><input type="number" id="kisaVadeliBorclar" placeholder="0"></div>
+                        <div class="field"><label>Uzun Vadeli Borçlar</label><input type="number" id="uzunVadeliBorclar" placeholder="0"></div>
+                        <div class="field"><label>Toplam Borçlar</label><input type="number" id="toplamBorclar" placeholder="0"></div>
+                        <div class="field"><label>Özkaynak (Özsermaye)</label><input type="number" id="ozkaynak" placeholder="0"></div>
+                    </div>
+                    <div class="input-group">
+                        <h3 class="group-title">📊 Gelir Tablosu</h3>
+                        <div class="field"><label>Net Satışlar</label><input type="number" id="netSatislar" placeholder="0"></div>
+                        <div class="field"><label>Brüt Kar</label><input type="number" id="brutKar" placeholder="0"></div>
+                        <div class="field"><label>Faaliyet Karı (EBIT)</label><input type="number" id="faaliyetKari" placeholder="0"></div>
+                        <div class="field"><label>Net Kar</label><input type="number" id="netKar" placeholder="0"></div>
+                    </div>
+                    <div class="input-group">
+                        <h3 class="group-title">🏢 Ek Veriler</h3>
+                        <div class="field"><label>Alacaklar (Ticari)</label><input type="number" id="alacaklar" placeholder="0"></div>
+                        <div class="field"><label>Faiz Giderleri</label><input type="number" id="faizGiderleri" placeholder="0"></div>
+                        <div class="field"><label>Hisse Başı Kazanç (EPS)</label><input type="number" id="eps" placeholder="0"></div>
+                        <div class="field"><label>Hisse Fiyatı</label><input type="number" id="hisseFiyati" placeholder="0"></div>
+                    </div>
+                </div>
+                <div class="btn-row">
+                    <button class="btn-primary" onclick="hesapla()">Analiz Et →</button>
+                    <button class="btn-secondary" onclick="ornekVeriYukle()">Örnek Veri Yükle</button>
+                    <button class="btn-ghost" onclick="formuSifirla()">Temizle</button>
+                </div>
+            </div>
+
+            <div id="tab-csv" class="tab-content">
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-icon">📁</div>
+                    <p>CSV veya JSON dosyanızı sürükleyin</p>
+                    <span>ya da</span>
+                    <label class="btn-upload">
+                        Dosya Seç
+                        <input type="file" id="fileInput" accept=".csv,.json" style="display:none">
+                    </label>
+                    <p class="upload-hint">Desteklenen: .csv, .json</p>
+                </div>
+                <div id="csvPreview" class="csv-preview hidden"></div>
+                <div class="csv-format">
+                    <h4>Beklenen Format (CSV):</h4>
+                    <pre>alan,deger
+donenVarliklar,500000
+stoklar,120000
+nakit,80000
+toplamAktif,900000
+kisaVadeliBorclar,300000
+...</pre>
+                    <h4>Beklenen Format (JSON):</h4>
+                    <pre>{"donenVarliklar":500000,"stoklar":120000,"nakit":80000,...}</pre>
+                    <button class="btn-secondary" onclick="sablonIndir()">📥 Örnek CSV İndir</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== RATIOS ===== -->
+        <section id="section-ratios" class="section">
+            <h2 class="section-title">Rasyo Analizi</h2>
+            <div id="noDataMsg" class="no-data-msg">
+                <span>Önce veri girişi yapın</span>
+                <button class="btn-secondary" onclick="showSection('input')">Veri Gir →</button>
+            </div>
+            <div id="ratioResults" class="hidden">
+                <div class="ratio-category" id="catLikidite">
+                    <h3>💧 Likidite Rasyoları</h3>
+                    <div class="ratio-cards" id="rLikidite"></div>
+                </div>
+                <div class="ratio-category" id="catKaldirac">
+                    <h3>⚖️ Kaldıraç Rasyoları</h3>
+                    <div class="ratio-cards" id="rKaldirac"></div>
+                </div>
+                <div class="ratio-category" id="catKarlilik">
+                    <h3>📈 Karlılık Rasyoları</h3>
+                    <div class="ratio-cards" id="rKarlilik"></div>
+                </div>
+                <div class="ratio-category" id="catFaaliyet">
+                    <h3>🔄 Faaliyet Rasyoları</h3>
+                    <div class="ratio-cards" id="rFaaliyet"></div>
+                </div>
+                <div class="ratio-category" id="catPiyasa">
+                    <h3>📊 Piyasa Rasyoları</h3>
+                    <div class="ratio-cards" id="rPiyasa"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== CHARTS ===== -->
+        <section id="section-charts" class="section">
+            <h2 class="section-title">Grafikler</h2>
+            <div id="noDataMsgChart" class="no-data-msg">
+                <span>Önce veri girişi yapın</span>
+                <button class="btn-secondary" onclick="showSection('input')">Veri Gir →</button>
+            </div>
+            <div id="chartResults" class="hidden">
+                <div class="charts-grid">
+                    <div class="chart-card">
+                        <h4>Likidite Rasyoları</h4>
+                        <canvas id="chartLikidite"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h4>Karlılık Rasyoları (%)</h4>
+                        <canvas id="chartKarlilik"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h4>Varlık Dağılımı</h4>
+                        <canvas id="chartVarlik"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h4>Borç Yapısı</h4>
+                        <canvas id="chartBorc"></canvas>
+                    </div>
+                </div>
+                <div class="chart-card chart-full">
+                    <h4>Rasyo Radar Analizi</h4>
+                    <div class="radar-wrap"><canvas id="chartRadar"></canvas></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== REPORT ===== -->
+        <section id="section-report" class="section">
+            <h2 class="section-title">Rapor</h2>
+            <div id="noDataMsgReport" class="no-data-msg">
+                <span>Önce analiz yapın</span>
+                <button class="btn-secondary" onclick="showSection('input')">Veri Gir →</button>
+            </div>
+            <div id="reportContent" class="hidden">
+                <div class="report-actions">
+                    <button class="btn-primary" onclick="raporuYazdir()">🖨 Yazdır / PDF</button>
+                    <button class="btn-secondary" onclick="raporuCSVIndir()">📥 CSV İndir</button>
+                </div>
+                <div id="reportBody" class="report-body"></div>
+            </div>
+        </section>
+
+        <!-- ===== GLOSSARY ===== -->
+        <section id="section-glossary" class="section">
+            <h2 class="section-title">Terimler Sözlüğü</h2>
+            <div class="search-row">
+                <input type="text" id="glossarySearch" placeholder="Terim ara..." oninput="filterGlossary()">
+            </div>
+            <div id="glossaryList" class="glossary-list"></div>
+        </section>
+
+    </main>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="toast"></div>
+
+<script src="script.js"></script>
+</body>
+</html>
