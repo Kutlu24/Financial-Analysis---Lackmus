@@ -59,9 +59,21 @@
         <!-- ===== DASHBOARD ===== -->
         <section id="section-dashboard" class="section active">
             <div class="section-hero">
-                <h1>Finansal<br><em>Sağlık Skoru</em></h1>
-                <p>Şirketinizin finansal verilerini analiz edin, kritik rasyoları hesaplayın ve görsel raporlar oluşturun.</p>
-                <button class="btn-hero" onclick="showSection('input')">Analize Başla →</button>
+                <div class="hero-text">
+                    <h1>Finansal<br><em>Sağlık Skoru</em></h1>
+                    <p>Şirketinizin finansal verilerini analiz edin, kritik rasyoları hesaplayın ve görsel raporlar oluşturun.</p>
+                    <button class="btn-hero" onclick="showSection('input')">Analize Başla →</button>
+                </div>
+                <div class="hero-score">
+                    <div class="score-gauge-wrap">
+                        <canvas id="chartHealthScore"></canvas>
+                        <div class="score-center">
+                            <div class="score-number" id="scoreNumber">—</div>
+                            <div class="score-label" id="scoreLabel">Veri bekleniyor</div>
+                        </div>
+                    </div>
+                    <div class="score-caption">6 rasyodan ağırlıklı ortalama</div>
+                </div>
             </div>
             <div class="kpi-grid" id="kpiGrid">
                 <div class="kpi-card kpi-empty">

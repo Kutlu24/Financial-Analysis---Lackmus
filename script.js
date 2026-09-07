@@ -7,6 +7,7 @@ let veri = {};
 let rasyolar = {};
 let chartInstances = {};
 let analizYapildi = false;
+let saglikSkoru = null;
 
 // ─── NAV ──────────────────────────────────────────
 function showSection(id) {
@@ -155,7 +156,7 @@ function formuSifirla() {
         'uzunVadeliBorclar','toplamBorclar','ozkaynak','netSatislar','brutKar',
         'faaliyetKari','netKar','alacaklar','faizGiderleri','eps','hisseFiyati'];
     fields.forEach(f => { const el = document.getElementById(f); if (el) el.value = ''; });
-    veri = {}; rasyolar = {}; analizYapildi = false;
+    veri = {}; rasyolar = {}; analizYapildi = false; saglikSkoru = null;
     document.getElementById('noDataMsg').classList.remove('hidden');
     document.getElementById('ratioResults').classList.add('hidden');
     document.getElementById('noDataMsgChart').classList.remove('hidden');
@@ -165,6 +166,7 @@ function formuSifirla() {
     document.getElementById('alertsBox').classList.add('hidden');
     updateKPIs(null);
     updateStatus(null);
+    renderHealthScore();
     showToast('Veriler temizlendi', 'success');
 }
 
@@ -234,12 +236,84 @@ function hesapla() {
     };
 
     analizYapildi = true;
+
+    const skorBilesenleri = [
+        normalize(rasyolar.cariOran, 0, 3),
+        normalize(rasyolar.asitTest, 0, 2),
+        normalize(rasyolar.netKarMarji, 0, 0.3),
+        normalize(rasyolar.roe, 0, 0.3),
+        normalize(rasyolar.aktifDevir, 0, 3),
+        normalize(2 - (rasyolar.borcOzkaynak !== null ? rasyolar.borcOzkaynak : 2), 0, 2),
+    ];
+    saglikSkoru = Math.round(skorBilesenleri.reduce((a, b) => a + b, 0) / skorBilesenleri.length * 100);
+
     renderRatios();
     renderKPIs();
     renderCharts();
+    renderHealthScore();
     renderReport();
     updateStatus();
     showToast('Analiz tamamlandı ✓', 'success');
+}
+
+// ─── SAĞLIK SKORU ──────────────────────────────────
+function normalize(v, min, max) {
+    if (v === null || v === undefined) return 0;
+    return Math.min(1, Math.max(0, (v - min) / (max - min)));
+}
+
+function saglikDurumu(skor) {
+    if (skor >= 80) return { durum: 'ok', etiket: 'Mükemmel' };
+    if (skor >= 60) return { durum: 'ok', etiket: 'İyi' };
+    if (skor >= 40) return { durum: 'warn', etiket: 'Orta' };
+    if (skor >= 20) return { durum: 'warn', etiket: 'Zayıf' };
+    return { durum: 'danger', etiket: 'Kritik' };
+}
+
+function renderHealthScore() {
+    const numberEl = document.getElementById('scoreNumber');
+    const labelEl = document.getElementById('scoreLabel');
+    destroyChart('chartHealthScore');
+    const ctx = document.getElementById('chartHealthScore').getContext('2d');
+
+    if (saglikSkoru === null) {
+        numberEl.textContent = '—';
+        numberEl.style.color = 'var(--text)';
+        labelEl.textContent = 'Veri bekleniyor';
+        chartInstances.chartHealthScore = new Chart(ctx, {
+            type: 'doughnut',
+            data: { datasets: [{ data: [100], backgroundColor: ['#2e3347'], borderWidth: 0 }] },
+            options: {
+                rotation: -90, circumference: 180, cutout: '78%', maintainAspectRatio: false,
+                plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                animation: false,
+            }
+        });
+        return;
+    }
+
+    const { durum, etiket } = saglikDurumu(saglikSkoru);
+    const colorMap = { ok: CHART_COLORS.ok, warn: CHART_COLORS.warn, danger: CHART_COLORS.danger };
+
+    numberEl.textContent = saglikSkoru;
+    numberEl.style.color = colorMap[durum];
+    labelEl.textContent = etiket;
+
+    chartInstances.chartHealthScore = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            datasets: [{
+                data: [saglikSkoru, 100 - saglikSkoru],
+                backgroundColor: [colorMap[durum], '#252a38'],
+                borderWidth: 0,
+            }]
+        },
+        options: {
+            rotation: -90, circumference: 180, cutout: '78%', maintainAspectRatio: false,
+            plugins: { legend: { display: false }, tooltip: { enabled: false } },
+            animation: { duration: 700, easing: 'easeOutQuart' },
+        }
+    });
 }
 
 // ─── RASYO YORUMLARI ───────────────────────────────
@@ -709,11 +783,6 @@ function renderCharts() {
     destroyChart('chartRadar');
     const ctxR = document.getElementById('chartRadar').getContext('2d');
 
-    function normalize(v, min, max) {
-        if (v === null) return 0;
-        return Math.min(1, Math.max(0, (v - min) / (max - min)));
-    }
-
     const radarVals = [
         normalize(rasyolar.cariOran, 0, 3) * 100,
         normalize(rasyolar.asitTest, 0, 2) * 100,
@@ -896,3 +965,4 @@ function showToast(msg, type = '') {
 
 // ─── INIT ──────────────────────────────────────────
 renderGlossary();
+renderHealthScore();
