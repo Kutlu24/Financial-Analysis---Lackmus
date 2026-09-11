@@ -1,5 +1,10 @@
 /* =============================================
-   FINANSAL PUSULA — script.js
+   FINANCIAL COMPASS — script.js
+   Internal identifiers (field ids, object keys like
+   "cariOran"/"donenVarliklar") are left as-is on purpose -
+   they're plumbing, not user-facing text, and renaming them
+   would touch every line of this file for zero visible benefit.
+   Only the DISPLAYED strings are translated to English.
    ============================================= */
 
 // ─── STATE ────────────────────────────────────────
@@ -21,12 +26,12 @@ function showSection(id) {
     if (nav) nav.classList.add('active');
 
     const titles = {
-        dashboard: 'Gösterge Paneli',
-        input: 'Veri Girişi',
-        ratios: 'Rasyo Analizi',
-        charts: 'Grafikler',
-        report: 'Rapor',
-        glossary: 'Terimler Sözlüğü'
+        dashboard: 'Dashboard',
+        input: 'Data Entry',
+        ratios: 'Ratio Analysis',
+        charts: 'Charts',
+        report: 'Report',
+        glossary: 'Glossary of Terms'
     };
     document.getElementById('pageTitle').textContent = titles[id] || id;
 
@@ -60,7 +65,7 @@ document.querySelectorAll('.tab').forEach(tab => {
     });
 });
 
-// ─── FILE UPLOAD ───────────────────────────────────
+// ─── FILE UPLOAD (CSV/JSON) ────────────────────────
 const uploadArea = document.getElementById('uploadArea');
 const fileInput = document.getElementById('fileInput');
 
@@ -98,10 +103,10 @@ function isleDosya(f) {
                 });
                 veriUygula(obj);
             } else {
-                showToast('Desteklenmeyen dosya formatı', 'error');
+                showToast('Unsupported file format', 'error');
             }
         } catch (err) {
-            showToast('Dosya okuma hatası: ' + err.message, 'error');
+            showToast('File read error: ' + err.message, 'error');
         }
     };
     reader.readAsText(f);
@@ -112,7 +117,7 @@ function veriUygula(obj) {
     const preview = document.getElementById('csvPreview');
     preview.classList.remove('hidden');
     const keys = Object.keys(obj);
-    preview.innerHTML = `✓ ${keys.length} alan yüklendi: ${keys.join(', ')}`;
+    preview.innerHTML = `✓ ${keys.length} field(s) loaded: ${keys.join(', ')}`;
 
     // Fill form fields
     const fields = ['donenVarliklar','stoklar','nakit','toplamAktif','kisaVadeliBorclar',
@@ -123,11 +128,60 @@ function veriUygula(obj) {
         if (el && obj[f] !== undefined) el.value = obj[f];
     });
 
-    showToast(`${Object.keys(obj).length} alan başarıyla yüklendi ✓`, 'success');
+    showToast(`${Object.keys(obj).length} field(s) loaded successfully ✓`, 'success');
     hesapla();
 }
 
-// ─── ÖRNEK VERİ ────────────────────────────────────
+// ─── DOCUMENT UPLOAD (PDF / image, parsed server-side) ─
+const docUploadArea = document.getElementById('docUploadArea');
+const docFileInput = document.getElementById('docFileInput');
+const docStatus = document.getElementById('docStatus');
+
+docUploadArea.addEventListener('dragover', e => { e.preventDefault(); docUploadArea.classList.add('drag-over'); });
+docUploadArea.addEventListener('dragleave', () => docUploadArea.classList.remove('drag-over'));
+docUploadArea.addEventListener('drop', e => {
+    e.preventDefault();
+    docUploadArea.classList.remove('drag-over');
+    const f = e.dataTransfer.files[0];
+    if (f) isleBelge(f);
+});
+
+docFileInput.addEventListener('change', () => {
+    if (docFileInput.files[0]) isleBelge(docFileInput.files[0]);
+});
+
+async function isleBelge(f) {
+    docStatus.classList.remove('hidden');
+    docStatus.textContent = `Reading ${f.name} - this can take 10-40s (the file is sent to an AI model to extract the numbers)...`;
+
+    const formData = new FormData();
+    formData.append('file', f);
+
+    try {
+        const res = await fetch('/api/extract-balance-sheet', { method: 'POST', body: formData });
+        if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            throw new Error(body.detail || `Server error (${res.status})`);
+        }
+        const data = await res.json();
+        const extracted = data.fields || {};
+        const keys = Object.keys(extracted);
+        if (!keys.length) {
+            docStatus.textContent = `⚠ No recognizable balance-sheet fields found in ${f.name}. Try manual entry instead.`;
+            showToast('No fields extracted from document', 'error');
+            return;
+        }
+        docStatus.innerHTML = `✓ ${keys.length} field(s) extracted from ${f.name}: ${keys.join(', ')}` +
+            `<br><span style="color:var(--warn)">⚠ AI-extracted from the document image/text - please verify these numbers against the original before trusting the analysis.</span>`;
+        veriUygula(extracted);
+        showSection('ratios');
+    } catch (err) {
+        docStatus.textContent = '✗ Extraction failed: ' + err.message;
+        showToast('Document extraction failed: ' + err.message, 'error');
+    }
+}
+
+// ─── SAMPLE DATA ────────────────────────────────────
 function ornekVeriYukle() {
     const ornek = {
         donenVarliklar: 850000,
@@ -167,10 +221,10 @@ function formuSifirla() {
     updateKPIs(null);
     updateStatus(null);
     renderHealthScore();
-    showToast('Veriler temizlendi', 'success');
+    showToast('Data cleared', 'success');
 }
 
-// ─── VERİ OKUMA ────────────────────────────────────
+// ─── READ DATA ────────────────────────────────────
 function g(id) {
     const v = veri[id] !== undefined ? veri[id] : parseFloat(document.getElementById(id)?.value || '0');
     return isNaN(v) ? 0 : v;
@@ -181,7 +235,7 @@ function safe(num, den) {
     return num / den;
 }
 
-// ─── HESAPLA ───────────────────────────────────────
+// ─── CALCULATE ───────────────────────────────────────
 function hesapla() {
     const dv = g('donenVarliklar');
     const stok = g('stoklar');
@@ -201,35 +255,35 @@ function hesapla() {
     const hp = g('hisseFiyati');
 
     if (!dv && !ta && !ns) {
-        showToast('Lütfen önce veri girin', 'error');
+        showToast('Please enter data first', 'error');
         return;
     }
 
     rasyolar = {
-        // Likidite
+        // Liquidity
         cariOran: safe(dv, kvb),
         asitTest: safe(dv - stok, kvb),
         nakitOrani: safe(nakit, kvb),
 
-        // Kaldıraç
+        // Leverage
         borcOzkaynak: safe(tb, oz),
         finansalKaldirac: safe(ta, oz),
         borcAktif: safe(tb, ta),
         faizKarsilama: faiz ? safe(fk, faiz) : null,
 
-        // Karlılık
+        // Profitability
         brutKarMarji: safe(bk, ns),
         faaliyetKarMarji: safe(fk, ns),
         netKarMarji: safe(nk, ns),
         roe: safe(nk, oz),
         roa: safe(nk, ta),
 
-        // Faaliyet
+        // Activity
         aktifDevir: safe(ns, ta),
         alacakDevir: al ? safe(ns, al) : null,
         stokDevir: stok ? safe(ns, stok) : null,
 
-        // Piyasa
+        // Market
         fd: (eps && hp) ? safe(hp, eps) : null,
         hisseFiyati: hp,
         eps: eps,
@@ -253,21 +307,21 @@ function hesapla() {
     renderHealthScore();
     renderReport();
     updateStatus();
-    showToast('Analiz tamamlandı ✓', 'success');
+    showToast('Analysis complete ✓', 'success');
 }
 
-// ─── SAĞLIK SKORU ──────────────────────────────────
+// ─── HEALTH SCORE ──────────────────────────────────
 function normalize(v, min, max) {
     if (v === null || v === undefined) return 0;
     return Math.min(1, Math.max(0, (v - min) / (max - min)));
 }
 
 function saglikDurumu(skor) {
-    if (skor >= 80) return { durum: 'ok', etiket: 'Mükemmel' };
-    if (skor >= 60) return { durum: 'ok', etiket: 'İyi' };
-    if (skor >= 40) return { durum: 'warn', etiket: 'Orta' };
-    if (skor >= 20) return { durum: 'warn', etiket: 'Zayıf' };
-    return { durum: 'danger', etiket: 'Kritik' };
+    if (skor >= 80) return { durum: 'ok', etiket: 'Excellent' };
+    if (skor >= 60) return { durum: 'ok', etiket: 'Good' };
+    if (skor >= 40) return { durum: 'warn', etiket: 'Fair' };
+    if (skor >= 20) return { durum: 'warn', etiket: 'Weak' };
+    return { durum: 'danger', etiket: 'Critical' };
 }
 
 function renderHealthScore() {
@@ -279,7 +333,7 @@ function renderHealthScore() {
     if (saglikSkoru === null) {
         numberEl.textContent = '—';
         numberEl.style.color = 'var(--text)';
-        labelEl.textContent = 'Veri bekleniyor';
+        labelEl.textContent = 'Awaiting data';
         chartInstances.chartHealthScore = new Chart(ctx, {
             type: 'doughnut',
             data: { datasets: [{ data: [100], backgroundColor: ['#2e3347'], borderWidth: 0 }] },
@@ -316,200 +370,200 @@ function renderHealthScore() {
     });
 }
 
-// ─── RASYO YORUMLARI ───────────────────────────────
+// ─── RATIO COMMENTARY ───────────────────────────────
 const rasyoMeta = {
     cariOran: {
-        ad: 'Cari Oran',
+        ad: 'Current Ratio',
         kategori: 'likidite',
-        formul: 'Dönen Varlıklar / Kısa Vadeli Borçlar',
+        formul: 'Current Assets / Current Liabilities',
         yorum: (v) => {
             if (v === null) return null;
-            if (v >= 2) return { durum: 'ok', mesaj: 'Mükemmel likidite. Kısa vadeli borçları rahatlıkla karşılayabilir.' };
-            if (v >= 1.5) return { durum: 'ok', mesaj: 'İyi likidite. Kısa vadeli yükümlülükler güvende.' };
-            if (v >= 1) return { durum: 'warn', mesaj: 'Yeterli ancak sınırda. Nakit akışına dikkat.' };
-            return { durum: 'danger', mesaj: 'KRİTİK: Cari oran 1\'in altında! Likidite riski yüksek.' };
+            if (v >= 2) return { durum: 'ok', mesaj: 'Excellent liquidity. Can comfortably cover short-term liabilities.' };
+            if (v >= 1.5) return { durum: 'ok', mesaj: 'Good liquidity. Short-term obligations are secure.' };
+            if (v >= 1) return { durum: 'warn', mesaj: 'Adequate but tight. Watch cash flow closely.' };
+            return { durum: 'danger', mesaj: 'CRITICAL: Current ratio below 1! High liquidity risk.' };
         }
     },
     asitTest: {
-        ad: 'Asit Test Oranı',
+        ad: 'Acid-Test (Quick) Ratio',
         kategori: 'likidite',
-        formul: '(Dönen Varlıklar − Stoklar) / Kısa Vadeli Borçlar',
+        formul: '(Current Assets − Inventory) / Current Liabilities',
         yorum: (v) => {
             if (v === null) return null;
-            if (v >= 1) return { durum: 'ok', mesaj: 'Stoklar hariç likidite yeterli.' };
-            if (v >= 0.8) return { durum: 'warn', mesaj: 'Dikkat: Stok nakde çevrilmeden kısa vadeli borç ödemesi zor.' };
-            return { durum: 'danger', mesaj: 'KRİTİK: Asit test oranı çok düşük, acil likidite riski.' };
+            if (v >= 1) return { durum: 'ok', mesaj: 'Sufficient liquidity even excluding inventory.' };
+            if (v >= 0.8) return { durum: 'warn', mesaj: 'Caution: paying short-term debt without converting inventory to cash is difficult.' };
+            return { durum: 'danger', mesaj: 'CRITICAL: Acid-test ratio very low, urgent liquidity risk.' };
         }
     },
     nakitOrani: {
-        ad: 'Nakit Oranı',
+        ad: 'Cash Ratio',
         kategori: 'likidite',
-        formul: 'Nakit / Kısa Vadeli Borçlar',
+        formul: 'Cash / Current Liabilities',
         yorum: (v) => {
             if (v === null) return null;
-            if (v >= 0.5) return { durum: 'ok', mesaj: 'Nakit rezervleri güçlü.' };
-            if (v >= 0.2) return { durum: 'warn', mesaj: 'Nakit rezervleri orta düzey.' };
-            return { durum: 'danger', mesaj: 'Nakit rezervleri yetersiz. Acil ödeme kapasitesi zayıf.' };
+            if (v >= 0.5) return { durum: 'ok', mesaj: 'Strong cash reserves.' };
+            if (v >= 0.2) return { durum: 'warn', mesaj: 'Moderate cash reserves.' };
+            return { durum: 'danger', mesaj: 'Insufficient cash reserves. Weak emergency payment capacity.' };
         }
     },
     borcOzkaynak: {
-        ad: 'Borç / Özkaynak',
+        ad: 'Debt / Equity',
         kategori: 'kaldirac',
-        formul: 'Toplam Borçlar / Özkaynak',
+        formul: 'Total Liabilities / Equity',
         yorum: (v) => {
             if (v === null) return null;
-            if (v <= 0.5) return { durum: 'ok', mesaj: 'Düşük finansal risk. Güçlü özkaynak yapısı.' };
-            if (v <= 1) return { durum: 'ok', mesaj: 'Kabul edilebilir borçlanma seviyesi.' };
-            if (v <= 2) return { durum: 'warn', mesaj: 'Orta düzey kaldıraç. Takip gerekli.' };
-            return { durum: 'danger', mesaj: 'KRİTİK: Yüksek borçluluk! Finansal kırılganlık riski.' };
+            if (v <= 0.5) return { durum: 'ok', mesaj: 'Low financial risk. Strong equity structure.' };
+            if (v <= 1) return { durum: 'ok', mesaj: 'Acceptable level of borrowing.' };
+            if (v <= 2) return { durum: 'warn', mesaj: 'Moderate leverage. Needs monitoring.' };
+            return { durum: 'danger', mesaj: 'CRITICAL: High debt load! Financial fragility risk.' };
         }
     },
     finansalKaldirac: {
-        ad: 'Finansal Kaldıraç',
+        ad: 'Financial Leverage Ratio',
         kategori: 'kaldirac',
-        formul: 'Toplam Aktif / Özkaynak',
+        formul: 'Total Assets / Equity',
         yorum: (v) => {
             if (v === null) return null;
-            if (v <= 1.5) return { durum: 'ok', mesaj: 'Düşük kaldıraç, güvenli finansman.' };
-            if (v <= 2.5) return { durum: 'ok', mesaj: 'Makul kaldıraç oranı.' };
-            if (v <= 4) return { durum: 'warn', mesaj: 'Yüksek kaldıraç, dikkatli izleme önerilir.' };
-            return { durum: 'danger', mesaj: 'KRİTİK: Çok yüksek kaldıraç, iflas riski artar.' };
+            if (v <= 1.5) return { durum: 'ok', mesaj: 'Low leverage, safe financing.' };
+            if (v <= 2.5) return { durum: 'ok', mesaj: 'Reasonable leverage ratio.' };
+            if (v <= 4) return { durum: 'warn', mesaj: 'High leverage, close monitoring advised.' };
+            return { durum: 'danger', mesaj: 'CRITICAL: Very high leverage, elevated bankruptcy risk.' };
         }
     },
     borcAktif: {
-        ad: 'Borç / Aktif',
+        ad: 'Debt / Assets',
         kategori: 'kaldirac',
-        formul: 'Toplam Borçlar / Toplam Aktifler',
+        formul: 'Total Liabilities / Total Assets',
         yorum: (v) => {
             if (v === null) return null;
-            if (v <= 0.4) return { durum: 'ok', mesaj: 'Varlıkların büyük çoğunluğu özkaynak ile finanse ediliyor.' };
-            if (v <= 0.6) return { durum: 'warn', mesaj: 'Borç oranı yüksek, takip edin.' };
-            return { durum: 'danger', mesaj: 'KRİTİK: Varlıkların çoğu borçla finanse ediliyor.' };
+            if (v <= 0.4) return { durum: 'ok', mesaj: 'The large majority of assets are financed by equity.' };
+            if (v <= 0.6) return { durum: 'warn', mesaj: 'Debt ratio is high, keep monitoring.' };
+            return { durum: 'danger', mesaj: 'CRITICAL: Most assets are debt-financed.' };
         }
     },
     faizKarsilama: {
-        ad: 'Faiz Karşılama',
+        ad: 'Interest Coverage',
         kategori: 'kaldirac',
-        formul: 'EBIT / Faiz Giderleri',
+        formul: 'EBIT / Interest Expense',
         yorum: (v) => {
             if (v === null) return null;
-            if (v >= 5) return { durum: 'ok', mesaj: 'Faiz yükümlülükleri çok rahat karşılanıyor.' };
-            if (v >= 3) return { durum: 'ok', mesaj: 'Faiz ödemeleri güvende.' };
-            if (v >= 1.5) return { durum: 'warn', mesaj: 'Faiz ödemeleri karşılanıyor ancak marj dar.' };
-            return { durum: 'danger', mesaj: 'KRİTİK: Faiz ödemeleri risk altında!' };
+            if (v >= 5) return { durum: 'ok', mesaj: 'Interest obligations are covered very comfortably.' };
+            if (v >= 3) return { durum: 'ok', mesaj: 'Interest payments are secure.' };
+            if (v >= 1.5) return { durum: 'warn', mesaj: 'Interest payments are covered but the margin is thin.' };
+            return { durum: 'danger', mesaj: 'CRITICAL: Interest payments are at risk!' };
         }
     },
     brutKarMarji: {
-        ad: 'Brüt Kar Marjı',
+        ad: 'Gross Profit Margin',
         kategori: 'karlilik',
-        formul: 'Brüt Kar / Net Satışlar',
+        formul: 'Gross Profit / Net Sales',
         format: 'percent',
         yorum: (v) => {
             if (v === null) return null;
-            if (v >= 0.5) return { durum: 'ok', mesaj: 'Çok yüksek brüt kar marjı.' };
-            if (v >= 0.3) return { durum: 'ok', mesaj: 'Sağlıklı brüt kar marjı.' };
-            if (v >= 0.15) return { durum: 'warn', mesaj: 'Orta düzey marj, sektöre göre değerlendirin.' };
-            return { durum: 'danger', mesaj: 'Düşük brüt kar marjı. Maliyet baskısı var.' };
+            if (v >= 0.5) return { durum: 'ok', mesaj: 'Very high gross margin.' };
+            if (v >= 0.3) return { durum: 'ok', mesaj: 'Healthy gross margin.' };
+            if (v >= 0.15) return { durum: 'warn', mesaj: 'Moderate margin, compare against industry norms.' };
+            return { durum: 'danger', mesaj: 'Low gross margin. Cost pressure present.' };
         }
     },
     faaliyetKarMarji: {
-        ad: 'Faaliyet Kar Marjı',
+        ad: 'Operating Margin',
         kategori: 'karlilik',
-        formul: 'EBIT / Net Satışlar',
+        formul: 'EBIT / Net Sales',
         format: 'percent',
         yorum: (v) => {
             if (v === null) return null;
-            if (v >= 0.2) return { durum: 'ok', mesaj: 'Güçlü operasyonel karlılık.' };
-            if (v >= 0.1) return { durum: 'ok', mesaj: 'Yeterli faaliyet karlılığı.' };
-            if (v >= 0.05) return { durum: 'warn', mesaj: 'Zayıf faaliyet marjı.' };
-            return { durum: 'danger', mesaj: 'Faaliyet zararı veya çok düşük karlılık.' };
+            if (v >= 0.2) return { durum: 'ok', mesaj: 'Strong operational profitability.' };
+            if (v >= 0.1) return { durum: 'ok', mesaj: 'Adequate operating profitability.' };
+            if (v >= 0.05) return { durum: 'warn', mesaj: 'Weak operating margin.' };
+            return { durum: 'danger', mesaj: 'Operating loss or very low profitability.' };
         }
     },
     netKarMarji: {
-        ad: 'Net Kar Marjı',
+        ad: 'Net Profit Margin',
         kategori: 'karlilik',
-        formul: 'Net Kar / Net Satışlar',
+        formul: 'Net Profit / Net Sales',
         format: 'percent',
         yorum: (v) => {
             if (v === null) return null;
-            if (v >= 0.15) return { durum: 'ok', mesaj: 'Mükemmel net karlılık.' };
-            if (v >= 0.08) return { durum: 'ok', mesaj: 'İyi net kar marjı.' };
-            if (v >= 0.03) return { durum: 'warn', mesaj: 'Düşük net kar marjı.' };
-            return { durum: 'danger', mesaj: 'Net zarar veya marj kritik düzeyde düşük.' };
+            if (v >= 0.15) return { durum: 'ok', mesaj: 'Excellent net profitability.' };
+            if (v >= 0.08) return { durum: 'ok', mesaj: 'Good net profit margin.' };
+            if (v >= 0.03) return { durum: 'warn', mesaj: 'Low net profit margin.' };
+            return { durum: 'danger', mesaj: 'Net loss or critically low margin.' };
         }
     },
     roe: {
-        ad: 'ROE (Özkaynak Karlılığı)',
+        ad: 'ROE (Return on Equity)',
         kategori: 'karlilik',
-        formul: 'Net Kar / Özkaynak',
+        formul: 'Net Profit / Equity',
         format: 'percent',
         yorum: (v) => {
             if (v === null) return null;
-            if (v >= 0.2) return { durum: 'ok', mesaj: 'Özkaynak çok verimli kullanılıyor.' };
-            if (v >= 0.1) return { durum: 'ok', mesaj: 'Yeterli özkaynak getirisi.' };
-            if (v >= 0.05) return { durum: 'warn', mesaj: 'Düşük özkaynak getirisi.' };
-            return { durum: 'danger', mesaj: 'Özkaynak getirisi yetersiz.' };
+            if (v >= 0.2) return { durum: 'ok', mesaj: 'Equity is being used very efficiently.' };
+            if (v >= 0.1) return { durum: 'ok', mesaj: 'Adequate return on equity.' };
+            if (v >= 0.05) return { durum: 'warn', mesaj: 'Low return on equity.' };
+            return { durum: 'danger', mesaj: 'Insufficient return on equity.' };
         }
     },
     roa: {
-        ad: 'ROA (Aktif Karlılığı)',
+        ad: 'ROA (Return on Assets)',
         kategori: 'karlilik',
-        formul: 'Net Kar / Toplam Aktif',
+        formul: 'Net Profit / Total Assets',
         format: 'percent',
         yorum: (v) => {
             if (v === null) return null;
-            if (v >= 0.1) return { durum: 'ok', mesaj: 'Varlıklar çok verimli kullanılıyor.' };
-            if (v >= 0.05) return { durum: 'ok', mesaj: 'İyi aktif karlılığı.' };
-            if (v >= 0.02) return { durum: 'warn', mesaj: 'Düşük aktif verimliliği.' };
-            return { durum: 'danger', mesaj: 'Varlıklar karlı kullanılamıyor.' };
+            if (v >= 0.1) return { durum: 'ok', mesaj: 'Assets are being used very efficiently.' };
+            if (v >= 0.05) return { durum: 'ok', mesaj: 'Good return on assets.' };
+            if (v >= 0.02) return { durum: 'warn', mesaj: 'Low asset efficiency.' };
+            return { durum: 'danger', mesaj: 'Assets are not being used profitably.' };
         }
     },
     aktifDevir: {
-        ad: 'Aktif Devir Hızı',
+        ad: 'Asset Turnover',
         kategori: 'faaliyet',
-        formul: 'Net Satışlar / Toplam Aktif',
+        formul: 'Net Sales / Total Assets',
         yorum: (v) => {
             if (v === null) return null;
-            if (v >= 2) return { durum: 'ok', mesaj: 'Varlıklar hızla satışa dönüşüyor.' };
-            if (v >= 1) return { durum: 'ok', mesaj: 'Yeterli aktif kullanımı.' };
-            if (v >= 0.5) return { durum: 'warn', mesaj: 'Aktif devir hızı düşük.' };
-            return { durum: 'danger', mesaj: 'Varlıklar satışa çevrilemiyor.' };
+            if (v >= 2) return { durum: 'ok', mesaj: 'Assets convert to sales rapidly.' };
+            if (v >= 1) return { durum: 'ok', mesaj: 'Adequate asset utilization.' };
+            if (v >= 0.5) return { durum: 'warn', mesaj: 'Asset turnover is low.' };
+            return { durum: 'danger', mesaj: 'Assets are not converting to sales.' };
         }
     },
     alacakDevir: {
-        ad: 'Alacak Devir Hızı',
+        ad: 'Receivables Turnover',
         kategori: 'faaliyet',
-        formul: 'Net Satışlar / Ticari Alacaklar',
+        formul: 'Net Sales / Accounts Receivable',
         yorum: (v) => {
             if (v === null) return null;
-            if (v >= 10) return { durum: 'ok', mesaj: 'Alacaklar hızla tahsil ediliyor.' };
-            if (v >= 6) return { durum: 'ok', mesaj: 'Makul alacak tahsil süresi.' };
-            if (v >= 4) return { durum: 'warn', mesaj: 'Alacak tahsilatı yavaşlıyor.' };
-            return { durum: 'danger', mesaj: 'Yavaş alacak tahsilatı, nakit akışı riski.' };
+            if (v >= 10) return { durum: 'ok', mesaj: 'Receivables are collected quickly.' };
+            if (v >= 6) return { durum: 'ok', mesaj: 'Reasonable collection period.' };
+            if (v >= 4) return { durum: 'warn', mesaj: 'Collections are slowing down.' };
+            return { durum: 'danger', mesaj: 'Slow collections, cash-flow risk.' };
         }
     },
     stokDevir: {
-        ad: 'Stok Devir Hızı',
+        ad: 'Inventory Turnover',
         kategori: 'faaliyet',
-        formul: 'Net Satışlar / Stoklar',
+        formul: 'Net Sales / Inventory',
         yorum: (v) => {
             if (v === null) return null;
-            if (v >= 8) return { durum: 'ok', mesaj: 'Stoklar hızla satışa dönüşüyor.' };
-            if (v >= 4) return { durum: 'ok', mesaj: 'Stok yönetimi verimli.' };
-            if (v >= 2) return { durum: 'warn', mesaj: 'Stok devri yavaşlıyor.' };
-            return { durum: 'danger', mesaj: 'Stoklar satılamıyor, depolama maliyeti yüksek.' };
+            if (v >= 8) return { durum: 'ok', mesaj: 'Inventory converts to sales rapidly.' };
+            if (v >= 4) return { durum: 'ok', mesaj: 'Efficient inventory management.' };
+            if (v >= 2) return { durum: 'warn', mesaj: 'Inventory turnover is slowing.' };
+            return { durum: 'danger', mesaj: 'Inventory is not selling, high storage cost.' };
         }
     },
     fd: {
-        ad: 'F/K Oranı',
+        ad: 'P/E Ratio',
         kategori: 'piyasa',
-        formul: 'Hisse Fiyatı / EPS',
+        formul: 'Share Price / EPS',
         yorum: (v) => {
             if (v === null) return null;
-            if (v <= 10) return { durum: 'ok', mesaj: 'Düşük F/K, hisse ucuz görünüyor.' };
-            if (v <= 20) return { durum: 'ok', mesaj: 'Makul değerleme.' };
-            if (v <= 30) return { durum: 'warn', mesaj: 'Görece yüksek değerleme.' };
-            return { durum: 'danger', mesaj: 'Çok yüksek F/K, aşırı değerleme riski.' };
+            if (v <= 10) return { durum: 'ok', mesaj: 'Low P/E, shares look inexpensive.' };
+            if (v <= 20) return { durum: 'ok', mesaj: 'Reasonable valuation.' };
+            if (v <= 30) return { durum: 'warn', mesaj: 'Relatively high valuation.' };
+            return { durum: 'danger', mesaj: 'Very high P/E, overvaluation risk.' };
         }
     },
 };
@@ -521,7 +575,7 @@ function formatVal(v, meta) {
     return v.toFixed(2);
 }
 
-// ─── RENDER RASYOLAR ───────────────────────────────
+// ─── RENDER RATIOS ───────────────────────────────
 function renderRatios() {
     document.getElementById('noDataMsg').classList.add('hidden');
     document.getElementById('ratioResults').classList.remove('hidden');
@@ -543,7 +597,7 @@ function renderRatios() {
         if (!yorum) return;
 
         const badgeMap = { ok: 'badge-ok', warn: 'badge-warn', danger: 'badge-danger' };
-        const labelMap = { ok: 'İyi', warn: 'Dikkat', danger: 'Kritik' };
+        const labelMap = { ok: 'Good', warn: 'Caution', danger: 'Critical' };
         const fv = formatVal(v, meta);
 
         const card = document.createElement('div');
@@ -562,11 +616,11 @@ function renderRatios() {
 // ─── RENDER KPIs ───────────────────────────────────
 function renderKPIs() {
     const kpiDef = [
-        { key: 'cariOran', icon: '💧', label: 'Likidite Oranı', format: null },
-        { key: 'asitTest', icon: '⚗️', label: 'Asit Test Oranı', format: null },
-        { key: 'borcOzkaynak', icon: '⚖️', label: 'Borç/Özkaynak', format: null },
-        { key: 'netKarMarji', icon: '📈', label: 'Net Kar Marjı', format: 'percent' },
-        { key: 'aktifDevir', icon: '🔄', label: 'Aktif Devir Hızı', format: null },
+        { key: 'cariOran', icon: '💧', label: 'Current Ratio', format: null },
+        { key: 'asitTest', icon: '⚗️', label: 'Acid-Test Ratio', format: null },
+        { key: 'borcOzkaynak', icon: '⚖️', label: 'Debt / Equity', format: null },
+        { key: 'netKarMarji', icon: '📈', label: 'Net Profit Margin', format: 'percent' },
+        { key: 'aktifDevir', icon: '🔄', label: 'Asset Turnover', format: null },
         { key: 'roe', icon: '💰', label: 'ROE', format: 'percent' },
     ];
 
@@ -612,11 +666,11 @@ function renderKPIs() {
 function updateKPIs(data) {
     const grid = document.getElementById('kpiGrid');
     grid.innerHTML = `
-        <div class="kpi-card kpi-empty"><div class="kpi-icon">💧</div><div class="kpi-label">Likidite Oranı</div><div class="kpi-value">—</div></div>
-        <div class="kpi-card kpi-empty"><div class="kpi-icon">⚗️</div><div class="kpi-label">Asit Test Oranı</div><div class="kpi-value">—</div></div>
-        <div class="kpi-card kpi-empty"><div class="kpi-icon">⚖️</div><div class="kpi-label">Borç/Özkaynak</div><div class="kpi-value">—</div></div>
-        <div class="kpi-card kpi-empty"><div class="kpi-icon">📈</div><div class="kpi-label">Net Kar Marjı</div><div class="kpi-value">—</div></div>
-        <div class="kpi-card kpi-empty"><div class="kpi-icon">🔄</div><div class="kpi-label">Aktif Devir Hızı</div><div class="kpi-value">—</div></div>
+        <div class="kpi-card kpi-empty"><div class="kpi-icon">💧</div><div class="kpi-label">Current Ratio</div><div class="kpi-value">—</div></div>
+        <div class="kpi-card kpi-empty"><div class="kpi-icon">⚗️</div><div class="kpi-label">Acid-Test Ratio</div><div class="kpi-value">—</div></div>
+        <div class="kpi-card kpi-empty"><div class="kpi-icon">⚖️</div><div class="kpi-label">Debt / Equity</div><div class="kpi-value">—</div></div>
+        <div class="kpi-card kpi-empty"><div class="kpi-icon">📈</div><div class="kpi-label">Net Profit Margin</div><div class="kpi-value">—</div></div>
+        <div class="kpi-card kpi-empty"><div class="kpi-icon">🔄</div><div class="kpi-label">Asset Turnover</div><div class="kpi-value">—</div></div>
         <div class="kpi-card kpi-empty"><div class="kpi-icon">💰</div><div class="kpi-label">ROE</div><div class="kpi-value">—</div></div>
     `;
 }
@@ -624,7 +678,7 @@ function updateKPIs(data) {
 function updateStatus(s) {
     const dot = document.getElementById('statusDot');
     const txt = document.getElementById('statusText');
-    if (!s) { dot.className = 'status-dot'; txt.textContent = 'Veri Bekleniyor'; return; }
+    if (!s) { dot.className = 'status-dot'; txt.textContent = 'Awaiting Data'; return; }
 
     const alerts = Object.entries(rasyoMeta).filter(([k, m]) => {
         const v = rasyolar[k];
@@ -634,13 +688,13 @@ function updateStatus(s) {
 
     if (alerts.length >= 2) {
         dot.className = 'status-dot danger';
-        txt.textContent = `${alerts.length} Kritik Uyarı`;
+        txt.textContent = `${alerts.length} Critical Alerts`;
     } else if (alerts.length === 1) {
         dot.className = 'status-dot warn';
-        txt.textContent = '1 Kritik Uyarı';
+        txt.textContent = '1 Critical Alert';
     } else {
         dot.className = 'status-dot ok';
-        txt.textContent = 'Analiz Tamamlandı';
+        txt.textContent = 'Analysis Complete';
     }
 }
 
@@ -665,7 +719,7 @@ function renderCharts() {
     document.getElementById('noDataMsgChart').classList.add('hidden');
     document.getElementById('chartResults').classList.remove('hidden');
 
-    // Likidite bar chart
+    // Liquidity bar chart
     destroyChart('chartLikidite');
     const ctxL = document.getElementById('chartLikidite').getContext('2d');
     const likvars = [rasyolar.cariOran, rasyolar.asitTest, rasyolar.nakitOrani];
@@ -673,10 +727,10 @@ function renderCharts() {
     chartInstances.chartLikidite = new Chart(ctxL, {
         type: 'bar',
         data: {
-            labels: ['Cari Oran', 'Asit Test', 'Nakit Oranı'],
+            labels: ['Current Ratio', 'Acid-Test', 'Cash Ratio'],
             datasets: [
                 {
-                    label: 'Değer',
+                    label: 'Value',
                     data: likvars.map(v => v !== null ? parseFloat(v.toFixed(3)) : 0),
                     backgroundColor: likvars.map((v, i) => v !== null && v >= limitsL[i] ? '#4ade8066' : '#ef444466'),
                     borderColor: likvars.map((v, i) => v !== null && v >= limitsL[i] ? '#4ade80' : '#ef4444'),
@@ -684,7 +738,7 @@ function renderCharts() {
                     borderRadius: 6,
                 },
                 {
-                    label: 'Min. Eşik',
+                    label: 'Min. Threshold',
                     data: limitsL,
                     type: 'line',
                     borderColor: '#f59e0b',
@@ -702,14 +756,14 @@ function renderCharts() {
         }
     });
 
-    // Karlılık bar chart (percentages)
+    // Profitability bar chart (percentages)
     destroyChart('chartKarlilik');
     const ctxK = document.getElementById('chartKarlilik').getContext('2d');
     const kvals = [rasyolar.brutKarMarji, rasyolar.faaliyetKarMarji, rasyolar.netKarMarji, rasyolar.roe, rasyolar.roa];
     chartInstances.chartKarlilik = new Chart(ctxK, {
         type: 'bar',
         data: {
-            labels: ['Brüt Kar', 'Faaliyet Kar', 'Net Kar', 'ROE', 'ROA'],
+            labels: ['Gross Profit', 'Operating Profit', 'Net Profit', 'ROE', 'ROA'],
             datasets: [{
                 label: '%',
                 data: kvals.map(v => v !== null ? parseFloat((v * 100).toFixed(1)) : 0),
@@ -726,7 +780,7 @@ function renderCharts() {
         }
     });
 
-    // Varlık dağılımı doughnut
+    // Asset composition doughnut
     destroyChart('chartVarlik');
     const ctxV = document.getElementById('chartVarlik').getContext('2d');
     const dv2 = g('donenVarliklar');
@@ -736,7 +790,7 @@ function renderCharts() {
     chartInstances.chartVarlik = new Chart(ctxV, {
         type: 'doughnut',
         data: {
-            labels: ['Dönen Varlıklar', 'Duran Varlıklar'],
+            labels: ['Current Assets', 'Non-Current Assets'],
             datasets: [{
                 data: [dv_d, ud_d],
                 backgroundColor: ['#4ade8066', '#3b82f666'],
@@ -753,7 +807,7 @@ function renderCharts() {
         }
     });
 
-    // Borç yapısı doughnut
+    // Liability structure doughnut
     destroyChart('chartBorc');
     const ctxB = document.getElementById('chartBorc').getContext('2d');
     const kvb2 = g('kisaVadeliBorclar');
@@ -762,7 +816,7 @@ function renderCharts() {
     chartInstances.chartBorc = new Chart(ctxB, {
         type: 'doughnut',
         data: {
-            labels: ['Kısa Vadeli Borç', 'Uzun Vadeli Borç', 'Özkaynak'],
+            labels: ['Current Liabilities', 'Long-Term Liabilities', 'Equity'],
             datasets: [{
                 data: [kvb2 || 0, uvb2 || 0, oz2 || 0],
                 backgroundColor: ['#ef444466', '#f59e0b66', '#4ade8066'],
@@ -795,9 +849,9 @@ function renderCharts() {
     chartInstances.chartRadar = new Chart(ctxR, {
         type: 'radar',
         data: {
-            labels: ['Cari Oran', 'Asit Test', 'Net Kar Marjı', 'ROE', 'Aktif Devir', 'Borç Güvenliği'],
+            labels: ['Current Ratio', 'Acid-Test', 'Net Profit Margin', 'ROE', 'Asset Turnover', 'Debt Safety'],
             datasets: [{
-                label: 'Şirket',
+                label: 'Company',
                 data: radarVals,
                 backgroundColor: 'rgba(74,222,128,0.15)',
                 borderColor: '#4ade80',
@@ -821,7 +875,7 @@ function renderCharts() {
 }
 
 function formatTL(v) {
-    return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 }).format(v);
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v);
 }
 
 // ─── REPORT ────────────────────────────────────────
@@ -846,31 +900,31 @@ function renderReport() {
         </tr>`;
     }).join('');
 
-    const date = new Date().toLocaleDateString('tr-TR');
+    const date = new Date().toLocaleDateString('en-US');
 
     body.innerHTML = `
         <div class="report-section">
-            <h3>Finansal Analiz Raporu</h3>
-            <p style="color:var(--text2);font-size:13px;">Tarih: ${date} &nbsp;|&nbsp; Analiz: Finansal Pusula</p>
+            <h3>Financial Analysis Report</h3>
+            <p style="color:var(--text2);font-size:13px;">Date: ${date} &nbsp;|&nbsp; Analysis: Financial Compass</p>
         </div>
         <div class="report-section">
-            <h3>Tüm Rasyo Sonuçları</h3>
+            <h3>All Ratio Results</h3>
             <table class="report-table">
-                <thead><tr><th>Rasyo</th><th>Değer</th><th>Formül</th><th>Yorum</th></tr></thead>
+                <thead><tr><th>Ratio</th><th>Value</th><th>Formula</th><th>Comment</th></tr></thead>
                 <tbody>${rows}</tbody>
             </table>
         </div>
         <div class="report-section">
-            <h3>Finansal Özet</h3>
+            <h3>Financial Summary</h3>
             <table class="report-table">
-                <thead><tr><th>Kalem</th><th>Değer</th></tr></thead>
+                <thead><tr><th>Item</th><th>Value</th></tr></thead>
                 <tbody>
                     ${[
-                        ['Toplam Aktifler', formatTL(g('toplamAktif'))],
-                        ['Net Satışlar', formatTL(g('netSatislar'))],
-                        ['Net Kar', formatTL(g('netKar'))],
-                        ['Toplam Borçlar', formatTL(g('toplamBorclar'))],
-                        ['Özkaynak', formatTL(g('ozkaynak'))],
+                        ['Total Assets', formatTL(g('toplamAktif'))],
+                        ['Net Sales', formatTL(g('netSatislar'))],
+                        ['Net Profit', formatTL(g('netKar'))],
+                        ['Total Liabilities', formatTL(g('toplamBorclar'))],
+                        ['Equity', formatTL(g('ozkaynak'))],
                     ].map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('')}
                 </tbody>
             </table>
@@ -883,7 +937,7 @@ function raporuYazdir() {
 }
 
 function raporuCSVIndir() {
-    const rows = [['Rasyo', 'Değer', 'Durum', 'Yorum']];
+    const rows = [['Ratio', 'Value', 'Status', 'Comment']];
     Object.entries(rasyoMeta).forEach(([key, meta]) => {
         const v = rasyolar[key];
         if (v === null || v === undefined) return;
@@ -892,43 +946,43 @@ function raporuCSVIndir() {
         rows.push([meta.ad, formatVal(v, meta), yorum.durum, yorum.mesaj]);
     });
     const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = 'finansal_analiz.csv'; a.click();
-    showToast('CSV indirildi ✓', 'success');
+    const a = document.createElement('a'); a.href = url; a.download = 'financial_analysis.csv'; a.click();
+    showToast('CSV downloaded ✓', 'success');
 }
 
 function sablonIndir() {
     const alanlar = ['donenVarliklar','stoklar','nakit','toplamAktif','kisaVadeliBorclar',
         'uzunVadeliBorclar','toplamBorclar','ozkaynak','netSatislar','brutKar',
         'faaliyetKari','netKar','alacaklar','faizGiderleri','eps','hisseFiyati'];
-    const csv = 'alan,deger\n' + alanlar.map(a => `${a},0`).join('\n');
+    const csv = 'field,value\n' + alanlar.map(a => `${a},0`).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = 'finansal_pusula_sablon.csv'; a.click();
-    showToast('Şablon indirildi ✓', 'success');
+    const a = document.createElement('a'); a.href = url; a.download = 'financial_compass_template.csv'; a.click();
+    showToast('Template downloaded ✓', 'success');
 }
 
-// ─── SÖZLÜK ────────────────────────────────────────
+// ─── GLOSSARY ────────────────────────────────────────
 const sozluk = [
-    { terim: 'Cari Oran', aciklama: 'Dönen varlıkların kısa vadeli borçlara oranı. Şirketin kısa vadeli yükümlülüklerini karşılama kapasitesini gösterir. Genel kabul 1.5–2 arasıdır.' },
-    { terim: 'Asit Test Oranı (Hızlı Oran)', aciklama: 'Stoklar çıkarıldıktan sonra kalan dönen varlıkların kısa vadeli borçlara oranı. Stokların satılamadığı senaryoda likiditeyi ölçer.' },
-    { terim: 'Nakit Oranı', aciklama: 'Sadece nakit ve nakit benzeri varlıkların kısa vadeli borçlara oranı. En katı likidite göstergesidir.' },
-    { terim: 'Borç/Özkaynak (Kaldıraç)', aciklama: 'Toplam borçların özsermayeye oranı. Şirketin ne kadar dış kaynak kullandığını gösterir. 1\'in altı genellikle güvenli kabul edilir.' },
-    { terim: 'Finansal Kaldıraç', aciklama: 'Toplam aktiflerin özsermayeye oranı. Varlıkların ne kadarının borçla finanse edildiğini gösterir.' },
-    { terim: 'Faiz Karşılama Oranı', aciklama: 'EBIT\'in faiz giderlerine oranı. Şirketin faiz ödemelerini ne kadar rahat karşıladığını gösterir. 3 ve üzeri sağlıklı kabul edilir.' },
-    { terim: 'Brüt Kar Marjı', aciklama: 'Brüt kârın net satışlara oranı. Üretim/satın alma maliyetleri düşüldükten sonra kalan kâr marjını gösterir.' },
-    { terim: 'Net Kar Marjı', aciklama: 'Net kârın net satışlara oranı. Tüm giderler karşılandıktan sonra kalan nihai karlılığı ölçer.' },
-    { terim: 'ROE (Özkaynak Kârlılığı)', aciklama: 'Net kârın özkaynağa oranı. Hissedarların yatırdığı sermayenin ne kadar verimli kullanıldığını gösterir.' },
-    { terim: 'ROA (Aktif Kârlılığı)', aciklama: 'Net kârın toplam aktiflere oranı. Şirketin tüm varlıklarını ne kadar verimli kullandığını gösterir.' },
-    { terim: 'Aktif Devir Hızı', aciklama: 'Net satışların toplam aktiflere oranı. Varlıkların satışa ne hızla dönüştüğünü ölçer. Yüksek olması tercih edilir.' },
-    { terim: 'Alacak Devir Hızı', aciklama: 'Net satışların ticari alacaklara oranı. Alacakların ne hızla tahsil edildiğini gösterir.' },
-    { terim: 'Stok Devir Hızı', aciklama: 'Net satışların stoklara oranı. Stokların ne kadar hızlı satışa çevrildiğini ölçer.' },
-    { terim: 'F/K Oranı (Fiyat/Kazanç)', aciklama: 'Hisse senedi fiyatının hisse başı kazanca oranı. Piyasanın şirketi kaç yıllık kazanç üzerinden değerlediğini gösterir.' },
-    { terim: 'EPS (Hisse Başı Kazanç)', aciklama: 'Net kârın toplam hisse senedi sayısına bölümü. Her bir hisse senedine düşen kârı gösterir.' },
-    { terim: 'EBIT', aciklama: 'Faiz ve vergi öncesi kâr (Earnings Before Interest and Taxes). Şirketin operasyonel kârlılığını gösterir.' },
-    { terim: 'Özkaynak (Özsermaye)', aciklama: 'Toplam varlıklardan toplam borçların çıkarılmasıyla bulunan net değer. Hissedarlara ait gerçek sermayedir.' },
-    { terim: 'Likidite', aciklama: 'Bir varlığın hızla nakde çevrilebilme yeteneği. Yüksek likidite, borç ödeme kapasitesinin güçlü olduğunu ifade eder.' },
+    { terim: 'Current Ratio', aciklama: 'Current assets divided by current liabilities. Shows the company\'s capacity to cover short-term obligations. Generally accepted as healthy between 1.5–2.' },
+    { terim: 'Acid-Test Ratio (Quick Ratio)', aciklama: 'Current assets minus inventory, divided by current liabilities. Measures liquidity in the scenario where inventory cannot be sold.' },
+    { terim: 'Cash Ratio', aciklama: 'Only cash and cash equivalents divided by current liabilities. The strictest liquidity indicator.' },
+    { terim: 'Debt / Equity (Leverage)', aciklama: 'Total liabilities divided by equity. Shows how much external financing the company uses. Below 1 is generally considered safe.' },
+    { terim: 'Financial Leverage Ratio', aciklama: 'Total assets divided by equity. Shows what fraction of assets is financed with debt.' },
+    { terim: 'Interest Coverage Ratio', aciklama: 'EBIT divided by interest expense. Shows how comfortably the company covers its interest payments. 3 or above is considered healthy.' },
+    { terim: 'Gross Profit Margin', aciklama: 'Gross profit divided by net sales. Shows the profit margin remaining after production/purchase costs.' },
+    { terim: 'Net Profit Margin', aciklama: 'Net profit divided by net sales. Measures final profitability after all expenses are covered.' },
+    { terim: 'ROE (Return on Equity)', aciklama: 'Net profit divided by equity. Shows how efficiently shareholders\' invested capital is being used.' },
+    { terim: 'ROA (Return on Assets)', aciklama: 'Net profit divided by total assets. Shows how efficiently the company uses all of its assets.' },
+    { terim: 'Asset Turnover', aciklama: 'Net sales divided by total assets. Measures how quickly assets convert into sales. Higher is preferred.' },
+    { terim: 'Receivables Turnover', aciklama: 'Net sales divided by accounts receivable. Shows how quickly receivables are collected.' },
+    { terim: 'Inventory Turnover', aciklama: 'Net sales divided by inventory. Measures how quickly inventory converts into sales.' },
+    { terim: 'P/E Ratio (Price/Earnings)', aciklama: 'Share price divided by earnings per share. Shows how many years of earnings the market is valuing the company at.' },
+    { terim: 'EPS (Earnings Per Share)', aciklama: 'Net profit divided by total number of shares. Shows the profit attributable to each share.' },
+    { terim: 'EBIT', aciklama: 'Earnings Before Interest and Taxes. Shows the company\'s operating profitability.' },
+    { terim: 'Equity', aciklama: 'Total assets minus total liabilities. The company\'s net worth attributable to shareholders.' },
+    { terim: 'Liquidity', aciklama: 'An asset\'s ability to be quickly converted to cash. High liquidity indicates strong debt-repayment capacity.' },
 ];
 
 function renderGlossary(filter = '') {
