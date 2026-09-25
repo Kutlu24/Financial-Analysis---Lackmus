@@ -2,7 +2,7 @@
 name = "lackmus"
 version = "0.1.0"
 description = "Backend for Financial Compass (Lackmus): extracts balance-sheet fields from an uploaded PDF or image so the existing client-side ratio calculator can run on them"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<4.0"
 dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
