@@ -29,6 +29,28 @@ scanned PDF or call an LLM with a real API key on its own). Serves the frontend 
 `POST /api/extract-balance-sheet`. PDF handling via [PyMuPDF](https://pymupdf.readthedocs.io/) (text extraction and,
 for scanned PDFs, rasterizing page 1 to an image - no system dependency like poppler needed).
 
+## Validated extraction
+
+Both extraction paths (`extraction/text_extract.py` via GLM, `extraction/vision_extract.py` via Gemini) use
+[instructor](https://github.com/instructor-ai/instructor) to get back an already-validated `ExtractedFinancials`
+Pydantic model (`extraction/fields.py`) instead of hand-parsing the model's raw text output - no more stripping
+` ```json ` fences or regex-searching for the first `{...}` block, and a real accounting rule is now enforced:
+`toplamAktif` must equal `toplamBorclar + ozkaynak` (within a 1% tolerance for rounding), checked by a
+`@model_validator`. If the model's first response violates it, `instructor` automatically retries with the
+validation error fed back to the model (up to 2 retries) instead of the app silently trusting an inconsistent
+statement.
+
+**Honest caveat, found while testing this against the real GLM API**: when the source text itself contains
+inconsistent numbers, a retry can make the model quietly change the reported `toplamAktif` to match
+`toplamBorclar + ozkaynak` instead of preserving what the document literally states - it "fixes" the figure to
+satisfy validation rather than surfacing that the source itself doesn't add up. Still strictly better than the old
+code (no check at all, would have silently returned whatever the model said), but it's not a guarantee the numbers
+match the source verbatim - the existing frontend warning ("please verify these numbers against the original
+before trusting the analysis") remains load-bearing.
+
+Tests for the schema/validator itself are in `tests/test_fields.py` (no live API call needed); the extraction
+functions themselves were verified manually against the real GLM and Gemini APIs while building this.
+
 ## Running it
 
 Frontend only, no document upload (original behaviour):

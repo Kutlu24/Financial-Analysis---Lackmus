@@ -14,6 +14,14 @@ dependencies = [
     "openai>=1.50",
     "google-genai>=1.0",
     "pymupdf>=1.24",
+    # Validated structured extraction (extraction/fields.py's
+    # ExtractedFinancials, extraction/text_extract.py + vision_extract.py) -
+    # replaces the old hand-rolled JSON-fence-stripping parser with schema
+    # validation and automatic retry-with-error-feedback.
+    # [google-genai] extra pulls in jsonref, required for
+    # Mode.GENAI_STRUCTURED_OUTPUTS in vision_extract.py - omitting it fails
+    # at call time, not at import time, so it's easy to miss without this.
+    "instructor[google-genai]>=1.17",
 ]
 
 [project.optional-dependencies]
