@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from lackmus.advisor import llm, router
 from lackmus.advisor.context import (
     MAX_HISTORY,
+    MAX_PROMPT_CHARS,
     AdvisorContext,
     ChatRequest,
     build_system_prompt,
@@ -50,11 +51,12 @@ def test_prompt_includes_periods_and_scenario_when_present():
             {"label": "FY2024", "score": 55, "ratios": {"cariOran": 1.66}},
             {"label": "FY2025", "score": 64, "ratios": {"cariOran": 2.02}},
         ],
-        scenario={"levers": {"sales": -15, "gm": 0}, "base_score": 64, "scenario_score": 50, "warnings": ["Cash turns negative"]},
+        scenario={"levers": {"Net sales change (%)": -15, "Gross margin change (pp)": 0, "bogus": 5}, "base_score": 64, "scenario_score": 50, "warnings": ["Cash turns negative"]},
     )
     p = build_system_prompt(ctx)
     assert "FY2024: score=55" in p and "FY2025: score=64" in p
-    assert "sales=-15" in p and "gm=" not in p
+    assert "Net sales change (%)=-15" in p
+    assert "Gross margin change (pp)=" not in p and "bogus" not in p
     assert "64 -> 50" in p and "Cash turns negative" in p
 
 
@@ -88,6 +90,46 @@ def test_rate_limit_window():
     assert router._check_rate("b", now=150.0)
     assert router._check_rate("a", now=100.0 + router.RATE_WINDOW_S + 30)  # window slid past the first hits
     router._hits.clear()
+
+
+def test_global_budget_and_client_table_are_bounded(monkeypatch):
+    router._hits.clear()
+    monkeypatch.setattr(router, "GLOBAL_LIMIT", 3)
+    assert [router._check_rate(f"c{i}", now=10.0) for i in range(5)] == [True, True, True, False, False]
+    router._hits.clear()
+    monkeypatch.setattr(router, "MAX_CLIENTS", 3)  # the global bucket occupies one slot
+    assert router._check_rate("a", now=1.0) and router._check_rate("b", now=1.0)
+    assert not router._check_rate("c", now=2.0)
+    assert router._check_rate("c", now=1.0 + router.RATE_WINDOW_S + 5)  # stale entries are reclaimed
+    router._hits.clear()
+
+
+def test_client_id_uses_the_proxy_added_entry():
+    class Req:
+        headers = {"x-forwarded-for": "6.6.6.6, 203.0.113.9"}
+        client = type("C", (), {"host": "10.0.0.1"})()
+    assert router._client_id(Req()) == "203.0.113.9"
+    Req.headers = {}
+    assert router._client_id(Req()) == "10.0.0.1"
+
+
+def test_scenario_levers_ratios_and_prompt_size_are_capped():
+    levers = {f"junk{i}": 1.0 for i in range(500)} | {"Net sales change (%)": -9999}
+    ctx = AdvisorContext(
+        **CTX,
+        periods=[{"label": "A", "ratios": {f"k{i}": 1.0 for i in range(500)} | {"roe": 0.2}}] * 2,
+        scenario={"levers": levers},
+    )
+    assert ctx.scenario.levers == {"Net sales change (%)": -100.0}
+    assert ctx.periods[0].ratios == {"roe": 0.2}
+    with pytest.raises(ValidationError):
+        AdvisorContext(**CTX, scenario={"warnings": ["w" * 5000]})
+    big = AdvisorContext(
+        figures=CTX["figures"],
+        ratios=[{"key": "k", "name": "n" * 60, "display": "d" * 20, "note": "x" * 240}] * 24,
+        periods=[{"label": "L" * 24, "ratios": {"roe": 0.2}}] * 12,
+    )
+    assert len(build_system_prompt(big)) <= MAX_PROMPT_CHARS + 20
 
 
 def test_provider_fallback_skips_empty_and_failing(monkeypatch):

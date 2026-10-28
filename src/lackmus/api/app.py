@@ -21,9 +21,9 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from ..advisor.router import router as advisor_router
 from ..extraction.pdf_handling import extract_pdf_text, has_usable_text_layer, rasterize_first_page
 from ..extraction.text_extract import extract_from_text
-from ..advisor.router import router as advisor_router
 from ..extraction.vision_extract import extract_from_image
 
 def _allowed_origins() -> list[str]:

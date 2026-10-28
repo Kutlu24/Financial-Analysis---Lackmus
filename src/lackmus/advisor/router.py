@@ -16,27 +16,45 @@ router = APIRouter()
 # Free-tier LLM keys sit behind this endpoint, so it is rate limited per client.
 RATE_LIMIT = 20
 RATE_WINDOW_S = 600
+# Spoofing the client id must not let anyone spend the keys without bound: a global
+# budget and a bounded table cap the total no matter how many identities are invented.
+GLOBAL_LIMIT = 240
+MAX_CLIENTS = 5000
+_GLOBAL = "*"
 _hits: dict[str, deque[float]] = defaultdict(deque)
 _lock = threading.Lock()
 
 
 def _client_id(request: Request) -> str:
-    fwd = request.headers.get("x-forwarded-for", "")
-    return fwd.split(",")[0].strip() or (request.client.host if request.client else "unknown")
+    """The right-most X-Forwarded-For entry is the one our own proxy appended; earlier
+    entries are whatever the caller sent and can be forged."""
+    parts = [p.strip() for p in request.headers.get("x-forwarded-for", "").split(",") if p.strip()]
+    return parts[-1] if parts else (request.client.host if request.client else "unknown")
+
+
+def _prune(q: deque[float], now: float) -> None:
+    while q and now - q[0] > RATE_WINDOW_S:
+        q.popleft()
 
 
 def _check_rate(client: str, now: float | None = None) -> bool:
     now = time.monotonic() if now is None else now
     with _lock:
+        g = _hits[_GLOBAL]
+        _prune(g, now)
+        if len(g) >= GLOBAL_LIMIT:
+            return False
+        if client not in _hits and len(_hits) >= MAX_CLIENTS:
+            for k in [k for k, v in _hits.items() if k != _GLOBAL and (not v or now - v[-1] > RATE_WINDOW_S)]:
+                del _hits[k]
+            if len(_hits) >= MAX_CLIENTS:
+                return False
         q = _hits[client]
-        while q and now - q[0] > RATE_WINDOW_S:
-            q.popleft()
+        _prune(q, now)
         if len(q) >= RATE_LIMIT:
             return False
         q.append(now)
-        if len(_hits) > 5000:  # keep the table bounded
-            for k in [k for k, v in _hits.items() if not v or now - v[-1] > RATE_WINDOW_S]:
-                del _hits[k]
+        g.append(now)
         return True
 
 
