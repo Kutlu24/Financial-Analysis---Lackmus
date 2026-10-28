@@ -14,6 +14,10 @@ A financial ratio analysis tool for evaluating a company's financial statements,
 - Computes standard financial ratios: liquidity (current, acid-test/quick, cash), leverage (debt/equity, financial
   leverage, debt/assets, interest coverage), profitability (gross/operating/net margin, ROE, ROA), activity (asset/
   receivables/inventory turnover), and market (P/E) ratios.
+- **Trends & Scenarios**: save several periods (or import them from CSV, TSV, TXT, JSON, JSONL, XML, YAML or Excel in
+  wide or one-row-per-period layout), see every ratio and the health score per period with sparklines, and run a
+  what-if scenario (sales, margins, expenses, debt, inventory, receivables) that keeps the balance sheet balanced.
+  All client-side; the maths is deterministic code, not a model.
 - Multi-tab dashboard: **Dashboard**, **Data Entry**, **Ratio Analysis**, **Charts** (via Chart.js), **Report**, and
   a **Glossary** of the financial terms used.
 
