@@ -3,6 +3,7 @@
 
 Endpoints:
     POST /api/extract-balance-sheet   multipart file upload -> {fields: {...}}
+    POST /api/advisor/chat            grounded Q&A on the figures/ratios the browser sends
 
 The existing frontend (index.html/script.js/style.css) is entirely
 client-side and untouched except for the new "Upload Document" tab, which
@@ -22,6 +23,7 @@ from pydantic import BaseModel
 
 from ..extraction.pdf_handling import extract_pdf_text, has_usable_text_layer, rasterize_first_page
 from ..extraction.text_extract import extract_from_text
+from ..advisor.router import router as advisor_router
 from ..extraction.vision_extract import extract_from_image
 
 def _allowed_origins() -> list[str]:
@@ -60,6 +62,9 @@ async def _security_headers(request, call_next):
         "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
     )
     return response
+
+
+app.include_router(advisor_router)
 
 
 class ExtractResponse(BaseModel):

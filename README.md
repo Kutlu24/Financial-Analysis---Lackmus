@@ -18,6 +18,11 @@ A financial ratio analysis tool for evaluating a company's financial statements,
   wide or one-row-per-period layout), see every ratio and the health score per period with sparklines, and run a
   what-if scenario (sales, margins, expenses, debt, inventory, receivables) that keeps the balance sheet balanced.
   All client-side; the maths is deterministic code, not a model.
+- **Advisor chat**: ask questions about the figures you entered. The browser sends the ratios, statuses, health
+  score, saved periods and active scenario it already calculated to `POST /api/advisor/chat`; GLM (Gemini as
+  fallback) interprets that data and suggests actions. It is told to quote the numbers, not recompute them, to
+  decline buy/sell/hold or price-target questions, and to treat the data block as data. Nothing is stored; the
+  endpoint is rate limited (20 questions per 10 minutes per client). Descriptive analysis, not financial advice.
 - Multi-tab dashboard: **Dashboard**, **Data Entry**, **Ratio Analysis**, **Charts** (via Chart.js), **Report**, and
   a **Glossary** of the financial terms used.
 
